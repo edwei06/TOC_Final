@@ -1,0 +1,6 @@
+streamlit
+requests
+chromadb
+sentence-transformers
+tf-keras
+python-dotenv
