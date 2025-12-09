@@ -12,19 +12,17 @@ API_KEY = "06d03eff510e2f734bcc806f20b892a5703c7820c13114e77af46ac56d658cf6"
 
 # 3. 指定的模型名稱 (確認助教指定的是不是這個名字)
 MODEL_NAME = "gpt-oss:120b" 
-# ==========================================
-def query_llm(prompt, system_prompt=""):
+
+def query_llm_stream(prompt, system_prompt=""):
     """
-    發送請求給學校 API。
-    為了讓 Agent 邏輯好寫，這裡暫時使用 stream=False (一次回傳)，
-    並設定較長的 timeout 等待大模型運算。
+    使用串流 (Streaming) 模式呼叫 LLM。
     """
     full_prompt = f"System: {system_prompt}\nUser: {prompt}\nAssistant:"
     
     payload = {
         "model": MODEL_NAME,
         "prompt": full_prompt,
-        "stream": False,  # Agent 邏輯需要完整字串，先不開串流
+        "stream": True,
         "options": {
             "temperature": 0.7 
         }
@@ -36,24 +34,24 @@ def query_llm(prompt, system_prompt=""):
     }
 
     try:
-        # 設定 timeout=120 (兩分鐘)，避免大模型算太久報錯
-        response = requests.post(
-            OLLAMA_API_URL, 
-            json=payload, 
-            headers=headers, 
-            timeout=120
-        )
-        response.raise_for_status()
-        
-        result = response.json()
-        return result.get("response", "")
-        
-    except requests.exceptions.Timeout:
-        return "錯誤：模型回應超時 (Timeout)。請稍後再試，或告知助教模型負載過高。"
+        # Timeout 設定為 120 秒，避免排隊時斷線
+        with requests.post(OLLAMA_API_URL, json=payload, headers=headers, stream=True, timeout=300) as response:
+            response.raise_for_status()
+            
+            for line in response.iter_lines():
+                if line:
+                    decoded_line = line.decode('utf-8')
+                    try:
+                        json_obj = json.loads(decoded_line)
+                        chunk = json_obj.get("response", "")
+                        
+                        # 有內容就 yield 出去
+                        if chunk:
+                            yield chunk
+                            
+                        if json_obj.get("done", False):
+                            break
+                    except ValueError:
+                        continue
     except Exception as e:
-        return f"Error connecting to LLM: {str(e)}"
-
-# 測試用
-if __name__ == "__main__":
-    print("正在測試正式 client...")
-    print(query_llm("你好，請簡短回答這是不是正式連線？"))
+        yield f"Error: {str(e)}"
