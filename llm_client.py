@@ -11,7 +11,7 @@ OLLAMA_API_URL = "https://api-gateway.netdb.csie.ncku.edu.tw/api/generate"
 API_KEY = "06d03eff510e2f734bcc806f20b892a5703c7820c13114e77af46ac56d658cf6"
 
 # 3. 指定的模型名稱 (確認助教指定的是不是這個名字)
-MODEL_NAME = "gpt-oss:120b" 
+MODEL_NAME = "gemma3:4b" 
 
 def query_llm_stream(prompt, system_prompt=""):
     """
@@ -35,7 +35,7 @@ def query_llm_stream(prompt, system_prompt=""):
 
     try:
         # Timeout 設定為 120 秒，避免排隊時斷線
-        with requests.post(OLLAMA_API_URL, json=payload, headers=headers, stream=True, timeout=300) as response:
+        with requests.post(OLLAMA_API_URL, json=payload, headers=headers, stream=True, timeout=120) as response:
             response.raise_for_status()
             
             for line in response.iter_lines():
