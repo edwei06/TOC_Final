@@ -13,51 +13,53 @@ class BlockchainAgent:
         self.state = "CLASSIFY_INTENT"
         intent = self._classify_intent(user_input)
         
-        # 預設變數
         final_prompt = user_input
         sys_prompt = "你是一個熱心的區塊鏈助教。"
 
         if intent == "KNOWLEDGE_QA":
             self.state = "RAG_RETRIEVAL"
             context = search_knowledge(user_input)
-            
             self.state = "GENERATING_ANSWER"
             final_prompt = f"參考資料：{context}\n\n使用者問題：{user_input}\n請根據資料回答，若資料不足可自行補充。"
             sys_prompt = "你是一個區塊鏈教學助教，擅長解釋專有名詞。"
 
         elif intent == "WALLET_ANALYSIS":
             self.state = "FETCHING_CHAIN_DATA"
+            
             # 抓取地址
             address_match = re.search(r'0x[a-fA-F0-9]{40}', user_input)
-            # 如果沒給地址，預設用 Vitalik 的做 Demo
             address = address_match.group(0) if address_match else "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045"
             
-            # 呼叫 Moralis API (已過濾)
+            # 呼叫 多鏈 API
             portfolio_data = get_wallet_portfolio(address)
             
-            # 整理資產字串給 LLM
+            # 整理資產字串 (加入 Chain 資訊)
             assets_str = ""
             for item in portfolio_data.get("portfolio", []):
                 assets_str += (
-                    f"- {item['symbol']}: 數量 {item['balance']:.2f}, "
-                    f"總值 ${item['value_usd']:.2f}\n"
+                    f"- [{item['chain']}] {item['symbol']}: "
+                    f"數量 {item['balance']:.2f}, "
+                    f"價值 ${item['value_usd']:.2f}\n"
                 )
+            
+            # 整理鏈上分佈
+            chain_dist_str = ", ".join([f"{k}: ${v:,.0f}" for k,v in portfolio_data.get("chain_stats", {}).items() if v > 0])
             total_worth = portfolio_data.get("total_net_worth_usd", 0)
 
             self.state = "ANALYZING_DATA"
             final_prompt = (
-                f"請分析以下以太坊錢包地址 {address} 的資產配置。\n"
-                f"【總資產淨值】: ${total_worth:,.2f} USD\n\n"
-                f"【前十大持倉資產 (已按價值排序)】:\n{assets_str}\n\n"
+                f"請對以太坊錢包 {address} 進行全鏈資產分析。\n"
+                f"【總資產淨值】: ${total_worth:,.2f} USD\n"
+                f"【公鏈資產分佈】: {chain_dist_str}\n\n"
+                f"【前 20 大持倉資產】:\n{assets_str}\n\n"
                 f"【分析任務】:\n"
-                f"1. 請製作一個 Markdown 表格，列出前 5 大資產的「幣種、價值(USD)、佔總資產百分比」。\n"
-                f"2. [資安檢測]：若清單中有非主流且價值異常高的代幣，請標註為「疑似詐騙空投」並提醒風險。\n"
-                f"3. 分析此人的投資風格（例如：巨鯨、DeFi 玩家、或避險者）。"
+                f"1. **資產總覽表格**：列出前 5 大資產，欄位包含「代幣、所在公鏈、價值(USD)、佔比」。\n"
+                f"2. **跨鏈行為分析**：觀察使用者的資產分佈。他是集中在 Ethereum 主網，還是活躍於 Layer 2 (如 Arbitrum, Optimism) 或其他公鏈 (BSC, Polygon)？這代表什麼樣的使用者畫像？\n"
+                f"3. **風險提示**：檢查是否有過度集中於單一資產或單一公鏈的風險。"
             )
-            sys_prompt = "你是一個專業的華爾街加密貨幣資產分析師。"
+            sys_prompt = "你是一個精通多鏈生態的資深加密貨幣分析師。"
 
         self.state = "IDLE"
-        # 回傳 Generator
         return query_llm_stream(final_prompt, sys_prompt)
 
     def _classify_intent(self, text):
