@@ -48,11 +48,11 @@ cd <YOUR_PROJECT_FOLDER>
 
 ```bash
 # macOS / Linux
-python3 -m venv venv
+python3.10 -m venv venv
 source venv/bin/activate
 
 # Windows
-python -m venv venv
+python -3.10 -m venv venv
 venv\Scripts\activate
 ```
 
